@@ -4,7 +4,7 @@ output:
   html_document:
     df_print: paged
 ---
-```{r,echo=F}
+```{r,message=F, warning=F}
 library(tidyverse)
 library(mlr)
 library(recipes)
@@ -12,9 +12,10 @@ library(recipes)
 ## Preprocessing
 
 Load the data
-```{r, echo=F}
-train_data <- read_csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
-test_data <- read_csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```{r, message=F, warning=F}
+quiet_read <- quietly(read_csv)
+train_data <- quiet_read("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")$result
+test_data <- quiet_read("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")$result
 ```
 
 ```{r}
@@ -87,7 +88,7 @@ mod_task <- makeClassifTask(data = trained, target = "classe")
 Let's try the random forest first. Check the performance with kappa and accuracy.
 
 ```{r}
-sampdesc <- makeResampleDesc("Holdout")
+sampdesc <- makeResampleDesc("CV", iters = 3)
 res <- resample("classif.randomForest", mod_task, sampdesc, list(kappa, acc))
 ```
 
