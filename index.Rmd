@@ -4,7 +4,7 @@ output:
   html_document:
     df_print: paged
 ---
-```{r}
+```{r,echo=F}
 library(tidyverse)
 library(mlr)
 library(recipes)
@@ -12,7 +12,7 @@ library(recipes)
 ## Preprocessing
 
 Load the data
-```{r}
+```{r, echo=F}
 train_data <- read_csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
 test_data <- read_csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
 ```
