@@ -1,0 +1,138 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+```{r}
+library(tidyverse)
+library(mlr)
+library(recipes)
+```
+## Preprocessing
+
+Load the data
+```{r}
+train_data <- read_csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+test_data <- read_csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+```{r}
+train_data$classe %>% .[1:10]
+```
+
+Remove index column, user_name, and convert date to Date type, then remove original variable.
+Also extract the date(without time) and hour part of time for convenience of modeling.
+```{r}
+train_data_ <- train_data %>% select(-X1, -user_name, -raw_timestamp_part_1, -raw_timestamp_part_1) %>% 
+    mutate(time = lubridate::dmy_hm(cvtd_timestamp)) %>% select(-cvtd_timestamp) %>% 
+    mutate(date = lubridate::date(time)) %>% mutate(hour = lubridate::hour(time)) %>%
+    select(-time) 
+
+```
+
+
+Note that the data only contain 4 days and 4 unique hours. This make them good candidates for dummy variables.
+```{r}
+train_data_$date %>% unique() %>% length
+train_data_$hour %>% unique() %>% length
+```
+
+
+Notice that many columns prevailed with NA, remove those variables.
+
+```{r}
+train_wo_na <- train_data_ %>% select_if(function(x) sum(is.na(x)) < 19000)
+```
+
+
+Convert Date to numeric, this will allow recipes to generate dummy varibles.
+```{r}
+train_wo_na <- train_wo_na %>% mutate(date = as.numeric(date))
+```
+
+Train preprocessing recipe on training data. Remove near zero variance variables, high correlation variables, then center and scale the numerical variable. At last, generate dummy varibles(one-hot encoding) for hour and date. After training, juice function will transform the training data. 
+
+```{r}
+train_rec <- recipe(classe ~ ., data = train_wo_na) %>% 
+    step_nzv(all_predictors(), options = list(freq_cut = 90/15, unique_cut = 10)) %>%
+    step_corr(all_numeric()) %>% 
+    step_center(all_numeric(), - hour) %>% 
+    step_scale(all_numeric(), - hour) %>% 
+    step_num2factor(hour, date) %>% 
+    step_dummy(hour, date) %>% 
+    step_meanimpute(all_numeric())
+    
+
+trained_rec <- train_rec %>% prep(retain = T, training = train_wo_na) 
+
+trained <- trained_rec %>% juice()
+
+```
+
+Take a look at the data.
+
+```{r}
+trained %>% head()
+```
+
+## Building Model
+
+First, encapsulate the training data into a task.
+
+```{r}
+mod_task <- makeClassifTask(data = trained, target = "classe")
+```
+
+Let's try the random forest first. Check the performance with kappa and accuracy.
+
+```{r}
+sampdesc <- makeResampleDesc("Holdout")
+res <- resample("classif.randomForest", mod_task, sampdesc, list(kappa, acc))
+```
+
+The performance looks good above. Let's apply it to the test set. First transform the test data
+
+```{r}
+test_data_ <- test_data %>% select(-X1, -user_name, -raw_timestamp_part_1, -raw_timestamp_part_1) %>% 
+    mutate(time = lubridate::dmy_hm(cvtd_timestamp)) %>% select(-cvtd_timestamp) %>% 
+    mutate(date = lubridate::date(time)) %>% mutate(hour = lubridate::hour(time)) %>%
+    select(-time) %>% mutate(date = as.numeric(date))
+```
+
+
+Drop the columns not used in training.
+
+```{r}
+test_data_ <- test_data_ %>% select(one_of(colnames(train_wo_na)))
+```
+Bake the recipe.
+
+```{r}
+test_df <- bake(trained_rec, test_data_) %>% select(-classe)
+```
+
+
+Train & predict
+
+```{r}
+mod <- train("classif.randomForest", mod_task)
+pred <- predict(mod, newdata = test_df)
+```
+```{r}
+pred$data
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
